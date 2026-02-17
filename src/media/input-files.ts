@@ -49,6 +49,7 @@ export type InputPdfLimits = {
   maxPages: number;
   maxPixels: number;
   minTextChars: number;
+  failOnPageOverflow?: boolean;
 };
 
 export type InputFileLimits = {
@@ -201,6 +202,91 @@ function clampText(text: string, maxChars: number): string {
   return text.slice(0, maxChars);
 }
 
+type PdfTextItemLike = {
+  str?: unknown;
+  transform?: unknown;
+  width?: unknown;
+};
+
+type PositionedTextToken = {
+  str: string;
+  x: number;
+  y: number;
+  width: number;
+};
+
+type PositionedLine = {
+  y: number;
+  tokens: PositionedTextToken[];
+};
+
+function toPositionedToken(item: unknown): PositionedTextToken | null {
+  const candidate = item as PdfTextItemLike;
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+  const str = typeof candidate.str === "string" ? candidate.str.trim() : "";
+  if (!str) {
+    return null;
+  }
+  const transform = Array.isArray(candidate.transform) ? candidate.transform : [];
+  const x = typeof transform[4] === "number" ? transform[4] : Number.NaN;
+  const y = typeof transform[5] === "number" ? transform[5] : Number.NaN;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  const width =
+    typeof candidate.width === "number" && Number.isFinite(candidate.width)
+      ? candidate.width
+      : Math.max(1, str.length * 4);
+  return { str, x, y, width };
+}
+
+function renderLineText(line: PositionedLine): string {
+  const tokens = [...line.tokens].toSorted((a, b) => a.x - b.x);
+  let output = "";
+  let previousEnd = Number.NaN;
+  let previousWidth = Number.NaN;
+  for (const token of tokens) {
+    if (output) {
+      const gap = token.x - previousEnd;
+      const avgCharWidth = Number.isFinite(previousWidth)
+        ? Math.max(2, previousWidth / Math.max(1, token.str.length))
+        : 3;
+      if (Number.isFinite(gap) && gap > avgCharWidth * 0.8 && !output.endsWith(" ")) {
+        output += " ";
+      }
+    }
+    output += token.str;
+    previousEnd = token.x + token.width;
+    previousWidth = token.width;
+  }
+  return output.replace(/\s+/g, " ").trim();
+}
+
+function reconstructPdfPageText(items: unknown[]): string {
+  const lineTolerance = 2.5;
+  const lines: PositionedLine[] = [];
+  for (const item of items) {
+    const token = toPositionedToken(item);
+    if (!token) {
+      continue;
+    }
+    const existing = lines.find((line) => Math.abs(line.y - token.y) <= lineTolerance);
+    if (existing) {
+      existing.tokens.push(token);
+      continue;
+    }
+    lines.push({ y: token.y, tokens: [token] });
+  }
+  lines.sort((a, b) => b.y - a.y);
+  return lines
+    .map((line) => renderLineText(line))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
 async function extractPdfContent(params: {
   buffer: Buffer;
   limits: InputFileLimits;
@@ -211,22 +297,22 @@ async function extractPdfContent(params: {
     data: new Uint8Array(buffer),
     disableWorker: true,
   }).promise;
+  if (limits.pdf.failOnPageOverflow && pdf.numPages > limits.pdf.maxPages) {
+    throw new Error(`PDF has ${pdf.numPages} pages (limit: ${limits.pdf.maxPages} pages)`);
+  }
   const maxPages = Math.min(pdf.numPages, limits.pdf.maxPages);
   const textParts: string[] = [];
 
   for (let pageNum = 1; pageNum <= maxPages; pageNum += 1) {
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item) => ("str" in item ? String(item.str) : ""))
-      .filter(Boolean)
-      .join(" ");
+    const pageText = reconstructPdfPageText(textContent.items as unknown[]);
     if (pageText) {
       textParts.push(pageText);
     }
   }
 
-  const text = textParts.join("\n\n");
+  const text = textParts.join("\n\f\n");
   if (text.trim().length >= limits.pdf.minTextChars) {
     return { text, images: [] };
   }

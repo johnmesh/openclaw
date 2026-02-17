@@ -32,6 +32,7 @@ const BASE_METHODS = [
   "wizard.status",
   "talk.config",
   "talk.mode",
+  "legal.review",
   "models.list",
   "agents.list",
   "agents.create",

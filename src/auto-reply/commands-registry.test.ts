@@ -40,6 +40,7 @@ describe("commands registry", () => {
     expect(specs.find((spec) => spec.name === "skill")).toBeTruthy();
     expect(specs.find((spec) => spec.name === "whoami")).toBeTruthy();
     expect(specs.find((spec) => spec.name === "compact")).toBeTruthy();
+    expect(specs.find((spec) => spec.name === "legal_review")).toBeTruthy();
   });
 
   it("filters commands based on config flags", () => {
@@ -167,6 +168,10 @@ describe("commands registry", () => {
 
   it("normalizes dock command aliases", () => {
     expect(normalizeCommandBody("/dock_telegram")).toBe("/dock-telegram");
+  });
+
+  it("normalizes legal review alias", () => {
+    expect(normalizeCommandBody("/legalreview kenya")).toBe("/legal-review kenya");
   });
 });
 

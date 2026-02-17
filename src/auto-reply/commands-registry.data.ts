@@ -173,6 +173,14 @@ function buildChatCommands(): ChatCommandDefinition[] {
       category: "status",
     }),
     defineChatCommand({
+      key: "legal-review",
+      nativeName: "legal_review",
+      description: "Review an attached contract PDF and highlight key risks.",
+      textAliases: ["/legal-review", "/legalreview"],
+      acceptsArgs: true,
+      category: "tools",
+    }),
+    defineChatCommand({
       key: "allowlist",
       description: "List/add/remove allowlist entries.",
       textAlias: "/allowlist",

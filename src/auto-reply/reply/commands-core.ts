@@ -19,6 +19,7 @@ import {
   handleStatusCommand,
   handleWhoamiCommand,
 } from "./commands-info.js";
+import { handleLegalReviewCommand } from "./commands-legal-review.js";
 import { handleModelsCommand } from "./commands-models.js";
 import { handlePluginCommand } from "./commands-plugin.js";
 import {
@@ -53,6 +54,7 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
       handleApproveCommand,
       handleContextCommand,
       handleWhoamiCommand,
+      handleLegalReviewCommand,
       handleSubagentsCommand,
       handleConfigCommand,
       handleDebugCommand,

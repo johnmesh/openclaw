@@ -11,6 +11,7 @@ import { cronHandlers } from "./server-methods/cron.js";
 import { deviceHandlers } from "./server-methods/devices.js";
 import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
 import { healthHandlers } from "./server-methods/health.js";
+import { legalReviewHandlers } from "./server-methods/legal-review.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { modelsHandlers } from "./server-methods/models.js";
 import { nodeHandlers } from "./server-methods/nodes.js";
@@ -78,6 +79,7 @@ const READ_METHODS = new Set([
   "chat.history",
   "config.get",
   "talk.config",
+  "legal.review",
 ]);
 const WRITE_METHODS = new Set([
   "send",
@@ -171,6 +173,7 @@ function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["c
 export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...connectHandlers,
   ...logsHandlers,
+  ...legalReviewHandlers,
   ...voicewakeHandlers,
   ...healthHandlers,
   ...channelsHandlers,
