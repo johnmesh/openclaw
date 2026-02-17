@@ -112,6 +112,8 @@ export async function monitorWebChannel(
   >();
   const groupMemberNames = new Map<string, Map<string, string>>();
   const echoTracker = createEchoTracker({ maxItems: 100, logVerbose });
+  /** DM session keys that have been activated by the user typing the wake phrase (WhatsApp only). */
+  const dmActivatedSessionKeys = new Set<string>();
 
   const sleep =
     tuning.sleep ??
@@ -168,6 +170,7 @@ export async function monitorWebChannel(
       groupHistories,
       groupMemberNames,
       echoTracker,
+      dmActivatedSessionKeys,
       backgroundTasks,
       replyResolver: replyResolver ?? getReplyFromConfig,
       replyLogger,

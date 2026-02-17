@@ -244,6 +244,8 @@ export const FIELD_LABELS: Record<string, string> = {
   "channels.telegram.timeoutSeconds": "Telegram API Timeout (seconds)",
   "channels.telegram.capabilities.inlineButtons": "Telegram Inline Buttons",
   "channels.whatsapp.dmPolicy": "WhatsApp DM Policy",
+  "channels.whatsapp.dmWakePhrase": "WhatsApp DM Wake Phrase",
+  "channels.whatsapp.dmStopPhrase": "WhatsApp DM Stop Phrase",
   "channels.whatsapp.selfChatMode": "WhatsApp Self-Phone Mode",
   "channels.whatsapp.debounceMs": "WhatsApp Message Debounce (ms)",
   "channels.signal.dmPolicy": "Signal DM Policy",

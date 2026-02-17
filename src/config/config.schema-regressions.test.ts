@@ -23,6 +23,23 @@ describe("config schema regressions", () => {
     expect(res.ok).toBe(true);
   });
 
+  it("accepts whatsapp dmWakePhrase and dmStopPhrase", () => {
+    const res = validateConfigObject({
+      channels: {
+        whatsapp: {
+          allowFrom: ["+1555"],
+          dmWakePhrase: "LadyJusticeAI",
+          dmStopPhrase: "stop",
+        },
+      },
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.config.channels?.whatsapp?.dmWakePhrase).toBe("LadyJusticeAI");
+      expect(res.config.channels?.whatsapp?.dmStopPhrase).toBe("stop");
+    }
+  });
+
   it('accepts memorySearch fallback "voyage"', () => {
     const res = validateConfigObject({
       agents: {

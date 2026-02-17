@@ -15,6 +15,8 @@ import { updateLastRouteInBackground } from "./last-route.js";
 import { resolvePeerId } from "./peer.js";
 import { processMessage } from "./process-message.js";
 
+const DEFAULT_DM_STOP_PHRASE = "stop";
+
 export function createWebOnMessageHandler(params: {
   cfg: ReturnType<typeof loadConfig>;
   verbose: boolean;
@@ -24,11 +26,13 @@ export function createWebOnMessageHandler(params: {
   groupHistories: Map<string, GroupHistoryEntry[]>;
   groupMemberNames: Map<string, Map<string, string>>;
   echoTracker: EchoTracker;
+  /** Set of WhatsApp DM session keys that have said the wake phrase; reply only when in this set. */
+  dmActivatedSessionKeys: Set<string>;
   backgroundTasks: Set<Promise<unknown>>;
   replyResolver: typeof getReplyFromConfig;
   replyLogger: ReturnType<(typeof import("../../../logging.js"))["getChildLogger"]>;
   baseMentionConfig: MentionConfig;
-  account: { authDir?: string; accountId?: string };
+  account: { authDir?: string; accountId?: string; dmWakePhrase?: string; dmStopPhrase?: string };
 }) {
   const processForRoute = async (
     msg: WebInboundMsg,
@@ -146,6 +150,32 @@ export function createWebOnMessageHandler(params: {
       // Ensure `peerId` for DMs is stable and stored as E.164 when possible.
       if (!msg.senderE164 && peerId && peerId.startsWith("+")) {
         msg.senderE164 = normalizeE164(peerId) ?? msg.senderE164;
+      }
+      // WhatsApp DM wake/stop: when dmWakePhrase is set, reply only after user types it; "stop" deactivates.
+      const wakePhrase = params.account.dmWakePhrase?.trim();
+      if (wakePhrase) {
+        const stopPhrase = (
+          params.account.dmStopPhrase?.trim() || DEFAULT_DM_STOP_PHRASE
+        ).toLowerCase();
+        const bodyTrimmed = (msg.body ?? "").trim();
+        const bodyLower = bodyTrimmed.toLowerCase();
+        if (bodyLower === stopPhrase) {
+          params.dmActivatedSessionKeys.delete(route.sessionKey);
+          logVerbose(`DM deactivated for ${route.sessionKey} (user said stop)`);
+          return;
+        }
+        if (bodyLower === wakePhrase.toLowerCase()) {
+          params.dmActivatedSessionKeys.add(route.sessionKey);
+          logVerbose(`DM activated for ${route.sessionKey} (user said wake phrase)`);
+          // Do not reply to the wake phrase itself; next message will get a reply.
+          return;
+        }
+        if (!params.dmActivatedSessionKeys.has(route.sessionKey)) {
+          logVerbose(
+            `Skipping DM from ${route.sessionKey}: not activated (say "${wakePhrase}" to start)`,
+          );
+          return;
+        }
       }
     }
 

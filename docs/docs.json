@@ -819,7 +819,7 @@
               },
               {
                 "group": "Guides",
-                "pages": ["start/openclaw"]
+                "pages": ["start/openclaw", "guides/legal-agent"]
               }
             ]
           },

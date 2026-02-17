@@ -46,6 +46,13 @@ export type WhatsAppConfig = {
   selfChatMode?: boolean;
   /** Optional allowlist for WhatsApp direct chats (E.164). */
   allowFrom?: string[];
+  /**
+   * When set, the bot only replies in DMs after the user sends this phrase (case-insensitive).
+   * Use with dmStopPhrase so users can say "stop" to stop replies until they send the wake phrase again.
+   */
+  dmWakePhrase?: string;
+  /** Phrase that deactivates DM replies (default "stop"). Only used when dmWakePhrase is set. */
+  dmStopPhrase?: string;
   /** Optional allowlist for WhatsApp group senders (E.164). */
   groupAllowFrom?: string[];
   /**
@@ -126,6 +133,10 @@ export type WhatsAppAccountConfig = {
   /** Same-phone setup for this account (bot uses your personal WhatsApp number). */
   selfChatMode?: boolean;
   allowFrom?: string[];
+  /** When set, bot only replies in DMs after user sends this phrase. See channel-level dmWakePhrase. */
+  dmWakePhrase?: string;
+  /** Phrase that deactivates DM replies (default "stop"). Only when dmWakePhrase is set. */
+  dmStopPhrase?: string;
   groupAllowFrom?: string[];
   groupPolicy?: GroupPolicy;
   /** Max group messages to keep as history context (0 disables). */
