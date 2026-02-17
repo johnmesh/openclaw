@@ -3,13 +3,30 @@ import { legalReviewCommand } from "../../commands/legal-review.js";
 import { defaultRuntime } from "../../runtime.js";
 import { runCommandWithRuntime } from "../cli-utils.js";
 
+function formatValueForError(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "<unprintable>";
+  }
+}
+
 function parseOptionalNumber(value: unknown): number | undefined {
   if (value === undefined || value === null || value === "") {
     return undefined;
   }
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid numeric value: ${String(value)}`);
+    throw new Error(`Invalid numeric value: ${formatValueForError(value)}`);
   }
   return parsed;
 }
@@ -20,7 +37,7 @@ function parseOptionalInt(value: unknown): number | undefined {
     return undefined;
   }
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`Invalid integer value: ${String(value)}`);
+    throw new Error(`Invalid integer value: ${formatValueForError(value)}`);
   }
   return parsed;
 }
