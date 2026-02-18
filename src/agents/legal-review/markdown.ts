@@ -29,6 +29,11 @@ export function buildPlainEnglishLegalReviewMarkdown(result: LegalReviewResult):
     `- Issues we are confident about: ${result.validatedFindings.length} (with supporting text from the contract)`,
   );
   lines.push(`- Items that still need lawyer review: ${result.needsHumanReview.length}`);
+  if (result.agreementChecklist) {
+    lines.push(
+      `- Checklist coverage (${result.agreementChecklist.agreementType}): ${result.agreementChecklist.summary.present} present, ${result.agreementChecklist.summary.missing} missing`,
+    );
+  }
   lines.push("");
 
   if (result.keyAreas.length > 0) {
@@ -65,6 +70,29 @@ export function buildPlainEnglishLegalReviewMarkdown(result: LegalReviewResult):
           fallback: "No reliable excerpt yet. Please check the original clause directly.",
         })}`,
       );
+    }
+  }
+
+  if (result.agreementChecklist) {
+    lines.push("");
+    lines.push("## Agreement Checklist");
+    for (const item of result.agreementChecklist.items) {
+      const marker =
+        item.status === "present" ? "present" : item.status === "unclear" ? "unclear" : "missing";
+      lines.push(`- **${item.title}**: ${marker}`);
+      if (item.evidence) {
+        lines.push(
+          `  - Excerpt: page ${item.evidence.page}, ${item.evidence.section} — "${item.evidence.quote}"`,
+        );
+      }
+      if (item.citations && item.citations.length > 0) {
+        const refs = item.citations
+          .map((citation) =>
+            citation.section ? `${citation.source} (${citation.section})` : citation.source,
+          )
+          .join("; ");
+        lines.push(`  - Legal basis: ${refs}`);
+      }
     }
   }
 

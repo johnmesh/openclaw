@@ -7,10 +7,12 @@ import type {
   ProposedFinding,
 } from "./types.js";
 import {
+  defaultAgreementChecklistEvaluator,
   defaultClauseExtractor,
   defaultContractTypeClassifier,
   defaultEvidenceVerifier,
   defaultJurisdictionResolver,
+  defaultLegalCharacterizer,
   defaultRiskScorer,
   defaultRuleMatcher,
   defaultRulePackSelector,
@@ -50,6 +52,8 @@ export function createDefaultLegalReviewDeps(params?: {
       }
       return defaultContractTypeClassifier(document);
     },
+    legalCharacterizer: defaultLegalCharacterizer,
+    agreementChecklistEvaluator: defaultAgreementChecklistEvaluator,
     rulePackSelector: defaultRulePackSelector,
     clauseExtractor: async ({ document, jurisdiction, contractType }) => {
       if (llmEnabled && params?.llm?.config) {
@@ -108,6 +112,16 @@ export async function runLegalReview(
     try {
       const jurisdiction = await resolvedDeps.jurisdictionResolver(params.document);
       const contractType = await resolvedDeps.contractTypeClassifier(params.document);
+      const legalCharacterization = await resolvedDeps.legalCharacterizer?.({
+        document: params.document,
+        jurisdiction,
+        contractType,
+      });
+      const agreementChecklist = await resolvedDeps.agreementChecklistEvaluator?.({
+        document: params.document,
+        jurisdiction,
+        contractType,
+      });
       const rulePack = await resolvedDeps.rulePackSelector({
         jurisdiction,
         contractType,
@@ -157,6 +171,8 @@ export async function runLegalReview(
         retried: attempt > 1,
         jurisdiction,
         contractType,
+        legalCharacterization,
+        agreementChecklistType: agreementChecklist?.agreementType,
         rulePackId: rulePack?.id,
         rulePackVersion: rulePack?.version,
         timestamp: nowIso,
@@ -166,6 +182,8 @@ export async function runLegalReview(
         validatedFindings,
         needsHumanReview,
         keyAreas,
+        legalCharacterization,
+        agreementChecklist,
         trace,
       };
     } catch (err) {

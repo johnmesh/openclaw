@@ -29,6 +29,11 @@ export type RulePackRule = {
   title: string;
   description: string;
   defaultSeverity: LegalSeverity;
+  citations?: Array<{
+    source: string;
+    section?: string;
+    url: string;
+  }>;
 };
 
 export type JurisdictionRulePack = {
@@ -55,6 +60,7 @@ export type ContractDocument = {
     governingLaw?: string;
     jurisdictionHint?: string;
     contractTypeHint?: string;
+    industryHint?: string;
   };
 };
 
@@ -105,21 +111,72 @@ export type ContractTypeResolution = {
   confidence: number;
 };
 
+export type LegalCharacteristicLabel =
+  | "bilateral"
+  | "unilateral"
+  | "express"
+  | "implied"
+  | "void"
+  | "voidable"
+  | "executed"
+  | "executory"
+  | "adhesion"
+  | "aleatory";
+
+export type LegalCharacterizationResolution = {
+  labels: LegalCharacteristicLabel[];
+  confidence: number;
+  source: string;
+};
+
 export type LegalReviewTrace = {
   attempt: number;
   retried: boolean;
   retryReason?: string;
   jurisdiction: JurisdictionResolution;
   contractType: ContractTypeResolution;
+  legalCharacterization?: LegalCharacterizationResolution;
+  agreementChecklistType?: string;
   rulePackId?: string;
   rulePackVersion?: string;
   timestamp: string;
+};
+
+export type ChecklistItemStatus = "present" | "missing" | "unclear";
+
+export type AgreementChecklistItem = {
+  id: string;
+  title: string;
+  status: ChecklistItemStatus;
+  citations?: Array<{
+    source: string;
+    section?: string;
+    url?: string;
+  }>;
+  evidence?: {
+    page: number;
+    section: string;
+    quote: string;
+  };
+};
+
+export type AgreementChecklistResult = {
+  agreementType: string;
+  jurisdiction: string;
+  items: AgreementChecklistItem[];
+  summary: {
+    present: number;
+    missing: number;
+    unclear: number;
+  };
 };
 
 export type LegalReviewResult = {
   validatedFindings: ReviewedFinding[];
   needsHumanReview: ReviewedFinding[];
   keyAreas: KeyArea[];
+  legalCharacterization?: LegalCharacterizationResolution;
+  agreementChecklist?: AgreementChecklistResult;
   trace: LegalReviewTrace[];
 };
 
@@ -139,6 +196,16 @@ export type LegalReviewRunParams = {
 export type LegalReviewDeps = {
   jurisdictionResolver: (document: ContractDocument) => Promise<JurisdictionResolution>;
   contractTypeClassifier: (document: ContractDocument) => Promise<ContractTypeResolution>;
+  legalCharacterizer?: (params: {
+    document: ContractDocument;
+    jurisdiction: JurisdictionResolution;
+    contractType: ContractTypeResolution;
+  }) => Promise<LegalCharacterizationResolution>;
+  agreementChecklistEvaluator?: (params: {
+    document: ContractDocument;
+    jurisdiction: JurisdictionResolution;
+    contractType: ContractTypeResolution;
+  }) => Promise<AgreementChecklistResult | undefined>;
   rulePackSelector: (params: {
     jurisdiction: JurisdictionResolution;
     contractType: ContractTypeResolution;

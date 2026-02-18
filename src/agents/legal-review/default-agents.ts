@@ -6,16 +6,23 @@ import type {
   JurisdictionResolution,
   JurisdictionRulePack,
   KeyArea,
+  LegalCharacterizationResolution,
   LegalSeverity,
   ProposedFinding,
   ReviewedFinding,
   RulePackRule,
 } from "./types.js";
+import { KENYA_CONTRACT_TYPE_ALIASES, normalizeKenyaContractType } from "./contract-types.js";
+import { DEFAULT_RULE_PACKS } from "./rule-packs.js";
+export { defaultAgreementChecklistEvaluator } from "./checklists.js";
 
 const normalize = (value: string): string => value.trim().toLowerCase();
 
 const contains = (text: string, pattern: string): boolean =>
   normalize(text).includes(normalize(pattern));
+
+const containsAny = (text: string, patterns: string[]): boolean =>
+  patterns.some((pattern) => contains(text, pattern));
 
 function normalizeJurisdictionId(value: string): string {
   const normalized = normalize(value);
@@ -89,6 +96,133 @@ const classifyClauseType = (text: string): ClauseType => {
   return "other";
 };
 
+function inferIndustry(params: { document: ContractDocument; contractType: string }): string {
+  const explicit = params.document.metadata?.industryHint;
+  if (explicit && explicit.trim()) {
+    return normalize(explicit);
+  }
+  const text = normalize(params.document.contractText);
+  if (containsAny(text, ["software", "saas", "platform", "api", "cloud"])) {
+    return "technology";
+  }
+  if (containsAny(text, ["hospital", "clinic", "patient", "medical"])) {
+    return "healthcare";
+  }
+  if (containsAny(text, ["tenant", "landlord", "premises", "lease"])) {
+    return "real_estate";
+  }
+  if (containsAny(text, ["construction", "contractor", "site", "works"])) {
+    return "construction";
+  }
+  if (containsAny(params.contractType, ["employment"])) {
+    return "employment";
+  }
+  return "general";
+}
+
+function classifyClauseTypeForContext(params: {
+  text: string;
+  contractType: string;
+  industry: string;
+  jurisdiction: string;
+}): ClauseType {
+  const base = classifyClauseType(params.text);
+  if (base !== "other") {
+    return base;
+  }
+
+  const text = normalize(params.text);
+  const contractType = normalize(params.contractType);
+  const industry = normalize(params.industry);
+  const jurisdiction = normalize(params.jurisdiction);
+
+  if (
+    containsAny(contractType, ["sales_agreement", "sale_of_goods", "international_sales_contract"])
+  ) {
+    if (
+      containsAny(text, ["price", "tax", "vat", "duty", "invoic", "quantity", "payment", "refund"])
+    ) {
+      return "payment";
+    }
+    if (
+      containsAny(text, [
+        "delivery",
+        "incoterm",
+        "risk transfer",
+        "title transfer",
+        "retention of title",
+      ])
+    ) {
+      return "liability";
+    }
+    if (
+      containsAny(text, [
+        "warrant",
+        "fitness for purpose",
+        "inspection",
+        "acceptance",
+        "defective",
+        "repair",
+        "replacement",
+      ])
+    ) {
+      return "warranty";
+    }
+    if (containsAny(text, ["termination", "breach", "insolvency"])) {
+      return "termination";
+    }
+    if (containsAny(text, ["indemn"])) {
+      return "indemnity";
+    }
+    if (containsAny(text, ["governing law", "dispute", "arbitration", "jurisdiction"])) {
+      return "dispute_resolution";
+    }
+    if (containsAny(text, ["assignment"])) {
+      return "assignment";
+    }
+    if (containsAny(text, ["confidential"])) {
+      return "confidentiality";
+    }
+  }
+
+  if (
+    containsAny(text, ["service level", "uptime", "availability", "service credits"]) &&
+    containsAny(contractType, ["msa", "sow", "services_agreement", "service agreement"]) &&
+    containsAny(industry, ["technology", "saas", "software"])
+  ) {
+    return "warranty";
+  }
+
+  if (
+    containsAny(text, [
+      "processor",
+      "controller",
+      "processing",
+      "data subject",
+      "security measures",
+    ]) &&
+    containsAny(jurisdiction, ["ke", "kenya", "uk", "eu"])
+  ) {
+    return "privacy";
+  }
+
+  if (
+    containsAny(text, ["notice period", "dismissal", "redundancy", "severance"]) &&
+    containsAny(contractType, ["employment"])
+  ) {
+    return "termination";
+  }
+
+  if (
+    containsAny(text, ["rent", "landlord", "tenant", "premises"]) &&
+    containsAny(contractType, ["lease", "tenancy"])
+  ) {
+    return "payment";
+  }
+
+  return "other";
+}
+
 function confidenceForSeverity(severity: LegalSeverity): number {
   if (severity === "critical") {
     return 0.9;
@@ -119,93 +253,84 @@ function hasCapLanguage(text: string): boolean {
 }
 
 const severityFromRule = (rule?: RulePackRule): LegalSeverity => rule?.defaultSeverity ?? "medium";
+export { DEFAULT_RULE_PACKS } from "./rule-packs.js";
 
-export const DEFAULT_RULE_PACKS: JurisdictionRulePack[] = [
-  {
-    id: "us-general-commercial",
-    version: "2026-01",
-    jurisdiction: "us",
-    effectiveFrom: "2026-01-01",
-    contractTypes: ["msa", "nda", "sow", "services_agreement", "general"],
-    rules: [
-      {
-        id: "US-LIAB-001",
-        clauseType: "liability",
-        title: "Liability cap clarity",
-        description: "Liability cap should be explicit and scoped.",
-        defaultSeverity: "high",
-      },
-      {
-        id: "US-TERM-001",
-        clauseType: "termination",
-        title: "Termination for convenience notice",
-        description: "Termination notice requirements should be explicit.",
-        defaultSeverity: "medium",
-      },
-      {
-        id: "US-CONF-001",
-        clauseType: "confidentiality",
-        title: "Confidentiality survival",
-        description: "Confidentiality duration and survival should be defined.",
-        defaultSeverity: "medium",
-      },
-    ],
-  },
-  {
-    id: "uk-general-commercial",
-    version: "2026-01",
-    jurisdiction: "uk",
-    effectiveFrom: "2026-01-01",
-    contractTypes: ["msa", "nda", "sow", "services_agreement", "general"],
-    rules: [
-      {
-        id: "UK-LIAB-001",
-        clauseType: "liability",
-        title: "Liability limitation reasonableness",
-        description: "Liability exclusions should be reviewed for enforceability risk.",
-        defaultSeverity: "high",
-      },
-      {
-        id: "UK-DISP-001",
-        clauseType: "dispute_resolution",
-        title: "Jurisdiction and venue clarity",
-        description: "Forum and venue should be clearly drafted.",
-        defaultSeverity: "medium",
-      },
-    ],
-  },
-  {
-    id: "ke-general-commercial",
-    version: "2026-01",
-    jurisdiction: "ke",
-    effectiveFrom: "2026-01-01",
-    contractTypes: ["msa", "nda", "sow", "services_agreement", "general"],
-    rules: [
-      {
-        id: "KE-DISP-001",
-        clauseType: "dispute_resolution",
-        title: "Governing law and forum clarity",
-        description:
-          "Governing law and dispute forum should be explicit and internally consistent.",
-        defaultSeverity: "high",
-      },
-      {
-        id: "KE-LIAB-001",
-        clauseType: "liability",
-        title: "Liability cap and carve-out clarity",
-        description: "Liability caps, exclusions, and carve-outs should be clearly drafted.",
-        defaultSeverity: "high",
-      },
-      {
-        id: "KE-PAY-001",
-        clauseType: "payment",
-        title: "Payment terms enforceability",
-        description: "Payment timing, default consequences, and interest terms should be explicit.",
-        defaultSeverity: "medium",
-      },
-    ],
-  },
+export const LEGAL_CHARACTERISTIC_LABELS: LegalCharacterizationResolution["labels"] = [
+  "bilateral",
+  "unilateral",
+  "express",
+  "implied",
+  "void",
+  "voidable",
+  "executed",
+  "executory",
+  "adhesion",
+  "aleatory",
 ];
+
+export async function defaultLegalCharacterizer(params: {
+  document: ContractDocument;
+  jurisdiction: JurisdictionResolution;
+  contractType: ContractTypeResolution;
+}): Promise<LegalCharacterizationResolution> {
+  const text = normalize(
+    [
+      params.document.contractText,
+      ...params.document.sections.map((section) => section.text),
+      params.contractType.contractType,
+    ].join(" "),
+  );
+  const labels = new Set<LegalCharacterizationResolution["labels"][number]>();
+
+  if (
+    containsAny(text, ["party a", "party b", "both parties", "each party", "mutual obligations"])
+  ) {
+    labels.add("bilateral");
+  }
+  if (containsAny(text, ["reward", "upon occurrence", "upon event", "insurer shall pay"])) {
+    labels.add("unilateral");
+  }
+  if (containsAny(text, ["the parties agree", "agreement is made", "terms and conditions"])) {
+    labels.add("express");
+  }
+  if (containsAny(text, ["implied by law", "custom and practice", "course of dealing"])) {
+    labels.add("implied");
+  }
+  if (containsAny(text, ["illegal purpose", "void ab initio", "unenforceable and void"])) {
+    labels.add("void");
+  }
+  if (containsAny(text, ["at the option", "may rescind", "voidable"])) {
+    labels.add("voidable");
+  }
+  if (containsAny(text, ["paid in full", "fully performed", "already delivered"])) {
+    labels.add("executed");
+  }
+  if (containsAny(text, ["shall", "future obligations", "to be performed"])) {
+    labels.add("executory");
+  }
+  if (containsAny(text, ["non-negotiable", "take it or leave it", "standard form contract"])) {
+    labels.add("adhesion");
+  }
+  if (
+    containsAny(text, ["insurance policy", "premium", "contingent event", "uncertain event"]) ||
+    containsAny(params.contractType.contractType, ["insurance"])
+  ) {
+    labels.add("aleatory");
+  }
+
+  if (labels.size === 0) {
+    labels.add("express");
+  }
+  const confidence = Math.min(0.95, 0.55 + labels.size * 0.08);
+  return {
+    labels: [...labels],
+    confidence,
+    source:
+      normalize(params.jurisdiction.jurisdiction) === "ke"
+        ? "heuristic_kenya_legal_characterizer"
+        : "heuristic_legal_characterizer",
+  };
+}
 
 export async function defaultJurisdictionResolver(
   document: ContractDocument,
@@ -252,19 +377,29 @@ export async function defaultContractTypeClassifier(
 ): Promise<ContractTypeResolution> {
   const hint = document.metadata?.contractTypeHint;
   if (hint && hint.trim()) {
-    return { contractType: normalize(hint), confidence: 0.95 };
+    return { contractType: normalizeKenyaContractType(hint), confidence: 0.95 };
   }
 
   const text = normalize(document.contractText);
-  if (text.includes("non-disclosure") || text.includes("nda")) {
-    return { contractType: "nda", confidence: 0.8 };
-  }
   if (text.includes("master services agreement") || text.includes("msa")) {
     return { contractType: "msa", confidence: 0.8 };
   }
   if (text.includes("statement of work") || text.includes("sow")) {
     return { contractType: "sow", confidence: 0.8 };
   }
+  if (text.includes("non-disclosure") || text.includes("nda")) {
+    return { contractType: "nda", confidence: 0.8 };
+  }
+
+  for (const [label, canonical] of Object.entries(KENYA_CONTRACT_TYPE_ALIASES)) {
+    if (label.length < 4) {
+      continue;
+    }
+    if (text.includes(label)) {
+      return { contractType: canonical, confidence: 0.76 };
+    }
+  }
+
   return { contractType: "general", confidence: 0.4 };
 }
 
@@ -302,6 +437,10 @@ export async function defaultClauseExtractor(params: {
 }): Promise<ProposedFinding[]> {
   const findings: ProposedFinding[] = [];
   let index = 0;
+  const industry = inferIndustry({
+    document: params.document,
+    contractType: params.contractType.contractType,
+  });
 
   const pushFinding = (paramsForFinding: {
     section: ContractDocument["sections"][number];
@@ -338,7 +477,12 @@ export async function defaultClauseExtractor(params: {
     if (!text) {
       continue;
     }
-    const clauseType = classifyClauseType(text);
+    const clauseType = classifyClauseTypeForContext({
+      text,
+      contractType: params.contractType.contractType,
+      industry,
+      jurisdiction: params.jurisdiction.jurisdiction,
+    });
     const lowered = text.toLowerCase();
 
     if (clauseType === "liability") {

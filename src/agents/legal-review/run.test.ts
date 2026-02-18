@@ -43,6 +43,24 @@ function createDeps(overrides?: Partial<LegalReviewDeps>): LegalReviewDeps {
       contractType: "msa",
       confidence: 0.9,
     }),
+    legalCharacterizer: async () => ({
+      labels: ["bilateral", "express", "executory"],
+      confidence: 0.82,
+      source: "heuristic_legal_characterizer",
+    }),
+    agreementChecklistEvaluator: async () => ({
+      agreementType: "msa",
+      jurisdiction: "us",
+      items: [
+        {
+          id: "governing-law",
+          title: "Governing Law",
+          status: "present",
+          evidence: { page: 1, section: "8. Liability", quote: "Liability is limited..." },
+        },
+      ],
+      summary: { present: 1, missing: 0, unclear: 0 },
+    }),
     rulePackSelector: async () => ({
       id: "us-pack",
       version: "v1",
@@ -106,6 +124,9 @@ describe("runLegalReview", () => {
     expect(result.needsHumanReview).toHaveLength(0);
     expect(result.validatedFindings[0]?.status).toBe("validated");
     expect(result.trace).toHaveLength(1);
+    expect(result.legalCharacterization?.labels).toContain("bilateral");
+    expect(result.agreementChecklist?.agreementType).toBe("msa");
+    expect(result.trace[0]?.agreementChecklistType).toBe("msa");
   });
 
   it("routes finding to needs_human_review when evidence is missing", async () => {

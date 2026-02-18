@@ -2,10 +2,13 @@ export { llmClauseExtractor, llmContractTypeClassifier } from "./llm-agents.js";
 export { createDefaultLegalReviewDeps, requireEvidenceHash, runLegalReview } from "./run.js";
 export {
   DEFAULT_RULE_PACKS,
+  defaultAgreementChecklistEvaluator,
   defaultClauseExtractor,
   defaultContractTypeClassifier,
   defaultEvidenceVerifier,
   defaultJurisdictionResolver,
+  defaultLegalCharacterizer,
+  LEGAL_CHARACTERISTIC_LABELS,
   defaultRiskScorer,
   defaultRuleMatcher,
   defaultRulePackSelector,
@@ -15,7 +18,10 @@ export { evaluateFindingGates } from "./gates.js";
 export { buildPlainEnglishLegalReviewMarkdown } from "./markdown.js";
 export {
   LegalReviewRetryableError,
+  type AgreementChecklistItem,
+  type AgreementChecklistResult,
   type ClauseType,
+  type ChecklistItemStatus,
   type ContractDocument,
   type ContractTypeResolution,
   type DocumentSection,
@@ -24,6 +30,8 @@ export {
   type JurisdictionResolution,
   type JurisdictionRulePack,
   type KeyArea,
+  type LegalCharacterizationResolution,
+  type LegalCharacteristicLabel,
   type LegalReviewDeps,
   type LegalReviewResult,
   type LegalReviewRunParams,
