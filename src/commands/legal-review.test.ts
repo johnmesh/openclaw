@@ -65,7 +65,7 @@ describe("loadContractDocument", () => {
       "SECTION 3 GOVERNING LAW",
       "This Agreement is governed by the laws of Kenya.",
     ].join("\n");
-    const strongText = new Array(120).fill(seed).join("\n\n");
+    const strongText = Array.from({ length: 120 }, () => seed).join("\n\n");
 
     mocks.extractFileContentFromSource.mockResolvedValue({
       filename: "good.pdf",

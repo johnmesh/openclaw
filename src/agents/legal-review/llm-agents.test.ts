@@ -32,7 +32,7 @@ function buildDocument(sectionCount: number): ContractDocument {
   return {
     sourceDocumentId: "doc-1",
     contractText: "Sample",
-    sections: new Array(sectionCount).fill(null).map((_, idx) => ({
+    sections: Array.from({ length: sectionCount }, (_, idx) => ({
       page: idx + 1,
       section: `Section ${idx + 1}`,
       text: `Clause text for section ${idx + 1}. Liability, payment, and governing law details.`,
