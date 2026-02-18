@@ -1,7 +1,0 @@
-import { GOVERNMENT_ITEMS, createKenyaTemplate, type ChecklistTemplateItem } from "../shared.ke.js";
-
-const ITEMS: ChecklistTemplateItem[] = [...GOVERNMENT_ITEMS];
-
-const template = createKenyaTemplate("government_grant_agreement", ITEMS);
-
-export default template;
