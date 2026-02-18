@@ -114,4 +114,25 @@ describe("handleLegalReviewCommand", () => {
     );
     expect(mocks.runLegalReview).toHaveBeenCalled();
   });
+
+  it("returns a friendly message when PDF is too large", async () => {
+    const pdfPath = path.join(workspaceDir, "large.pdf");
+    await fs.writeFile(pdfPath, "fake");
+
+    mocks.loadContractDocument.mockRejectedValueOnce(
+      new Error("PDF is too large. Maximum supported size is 25.0 MB."),
+    );
+
+    const result = await handleLegalReviewCommand(
+      buildParams({
+        mediaPath: pdfPath,
+        commandBodyNormalized: "/legal-review kenya",
+      }),
+      true,
+    );
+
+    expect(result?.shouldContinue).toBe(false);
+    expect(result?.reply?.isError).toBe(true);
+    expect(result?.reply?.text).toContain("Current limit: 25 MB");
+  });
 });

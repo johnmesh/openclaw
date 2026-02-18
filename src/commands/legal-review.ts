@@ -46,6 +46,59 @@ function bytesToMb(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
 }
 
+function normalizeLegalTextContent(text: string): string {
+  if (!text.trim()) {
+    return "";
+  }
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/([A-Za-z])-\n([A-Za-z])/g, "$1$2")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function scoreLegalTextQuality(text: string): number {
+  if (!text.trim()) {
+    return 0;
+  }
+  const compact = text.toLowerCase();
+  const tokenCount = compact.split(/\s+/).filter(Boolean).length;
+  const legalSignals = [
+    /\bsection\b/g,
+    /\bclause\b/g,
+    /\barticle\b/g,
+    /\bgoverning law\b/g,
+    /\bjurisdiction\b/g,
+    /\bliability\b/g,
+    /\bindemn(?:ity|ify)\b/g,
+    /\btermination\b/g,
+    /\bpayment\b/g,
+    /\bconfidential(?:ity)?\b/g,
+    /\bshall\b/g,
+    /\bhereby\b/g,
+  ].reduce((count, pattern) => count + (compact.match(pattern)?.length ?? 0), 0);
+  const lineCount = text.split("\n").filter((line) => line.trim().length > 0).length;
+  const lengthScore = Math.min(300, tokenCount * 0.08);
+  const structureScore = Math.min(80, lineCount * 0.4);
+  const signalScore = legalSignals * 6;
+  return lengthScore + structureScore + signalScore;
+}
+
+function chooseBestLegalText(params: { extractedText: string; ocrText: string }): string {
+  const extracted = normalizeLegalTextContent(params.extractedText);
+  const ocr = normalizeLegalTextContent(params.ocrText);
+  if (!extracted) {
+    return ocr;
+  }
+  if (!ocr) {
+    return extracted;
+  }
+  const extractedScore = scoreLegalTextQuality(extracted);
+  const ocrScore = scoreLegalTextQuality(ocr);
+  return ocrScore > extractedScore * 1.1 ? ocr : extracted;
+}
+
 function toFriendlyPdfLimitError(error: unknown): Error {
   const text = String(error);
   if (text.includes("File too large:")) {
@@ -83,24 +136,34 @@ async function extractScannedPdfTextWithLlm(params: {
       `openclaw-legal-ocr-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`,
     );
     const prompt =
-      "Transcribe this scanned contract page exactly as text. " +
-      "Return plain text only, no markdown, no explanation, no summaries.";
+      "Transcribe this scanned legal contract page exactly as plain text. " +
+      "Preserve section numbers, headings, line breaks, and clause ordering. " +
+      "If there is a table, place each row on its own line. " +
+      "Return only the transcribed text with no commentary.";
 
     try {
-      const result = await runEmbeddedPiAgent({
-        sessionId: `legal-ocr-${Date.now()}-${i + 1}`,
-        sessionKey: `temp:legal-ocr:${params.runId}:${i + 1}`,
-        agentId,
-        sessionFile,
-        workspaceDir,
-        agentDir,
-        config: params.cfg,
-        prompt,
-        images: [image],
-        disableTools: true,
-        timeoutMs,
-        runId: `${params.runId}-ocr-${i + 1}`,
-      });
+      const runOcr = async (attemptTimeoutMs: number) =>
+        runEmbeddedPiAgent({
+          sessionId: `legal-ocr-${Date.now()}-${i + 1}`,
+          sessionKey: `temp:legal-ocr:${params.runId}:${i + 1}`,
+          agentId,
+          sessionFile,
+          workspaceDir,
+          agentDir,
+          config: params.cfg,
+          prompt,
+          images: [image],
+          disableTools: true,
+          timeoutMs: attemptTimeoutMs,
+          runId: `${params.runId}-ocr-${i + 1}`,
+        });
+
+      let result;
+      try {
+        result = await runOcr(timeoutMs);
+      } catch {
+        result = await runOcr(Math.max(timeoutMs, 120_000));
+      }
       const text =
         result.payloads
           ?.map((payload) => payload.text ?? "")
@@ -123,7 +186,7 @@ async function extractScannedPdfTextWithLlm(params: {
     );
   }
 
-  return textParts.join("\n\n").trim();
+  return normalizeLegalTextContent(textParts.join("\n\f\n"));
 }
 
 function parseSectionsFromText(text: string): DocumentSection[] {
@@ -307,14 +370,18 @@ export async function loadContractDocument(
       throw toFriendlyPdfLimitError(error);
     }
 
-    let text = extracted.text?.trim() ?? "";
-    if (!text && opts.useLlm && extracted.images && extracted.images.length > 0) {
-      text = await extractScannedPdfTextWithLlm({
-        images: extracted.images,
-        cfg,
-        runId: opts.runId?.trim() || `legal-review-${Date.now()}`,
-        timeoutMs: opts.llmTimeoutMs ?? 90_000,
-      });
+    let text = normalizeLegalTextContent(extracted.text?.trim() ?? "");
+    if (opts.useLlm && extracted.images && extracted.images.length > 0) {
+      const shouldRunOcr = !text || text.length < 4_000 || scoreLegalTextQuality(text) < 220;
+      if (shouldRunOcr) {
+        const ocrText = await extractScannedPdfTextWithLlm({
+          images: extracted.images,
+          cfg,
+          runId: opts.runId?.trim() || `legal-review-${Date.now()}`,
+          timeoutMs: opts.llmTimeoutMs ?? 90_000,
+        });
+        text = chooseBestLegalText({ extractedText: text, ocrText });
+      }
     }
     if (!text) {
       throw new Error(
