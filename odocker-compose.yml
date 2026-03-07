@@ -1,0 +1,111 @@
+services:
+  openclaw-vpn:
+    image: qmcgaw/gluetun
+    container_name: openclaw_vpn
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=bOIa3VFiI8yMBHXu
+      - OPENVPN_PASSWORD=ddd
+      - AL#41 # or whichever country your current node is
+      - DNS_ADDRESS=1.1.1.1
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      - "8931:8931"
+    networks:
+      - cloudflare_tunnel_net
+
+  openclaw-gateway:
+    image: mengere/openclaw:latest
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENCLAW_PLAYWRIGHT_MCP_URL: http://localhost:8931/mcp
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+    init: true
+    restart: unless-stopped
+    network_mode: "service:openclaw-vpn"
+    depends_on:
+      openclaw-vpn:
+        condition: service_started
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "18789",
+        "--allow-unconfigured",
+      ]
+
+  openclaw-cli:
+    image: mengere/openclaw:latest
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      BROWSER: echo
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENCLAW_PLAYWRIGHT_MCP_URL: http://localhost:8931/mcp
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+    stdin_open: true
+    tty: true
+    init: true
+    network_mode: "service:openclaw-vpn"
+    depends_on:
+      openclaw-vpn:
+        condition: service_started
+    entrypoint: ["node", "dist/index.js"]
+
+  playwright-mcp:
+    image: mcr.microsoft.com/playwright/mcp:latest
+    container_name: playwright-mcp
+    init: true
+    restart: unless-stopped
+    network_mode: "service:openclaw-vpn"
+    depends_on:
+      openclaw-vpn:
+        condition: service_started
+    configs:
+      - source: playwright_mcp_context
+        target: /opt/playwright-context/playwright-mcp-context.json
+    entrypoint: ["node"]
+    command:
+      [
+        "cli.js",
+        "--headless",
+        "--browser",
+        "chromium",
+        "--no-sandbox",
+        "--port",
+        "8931",
+        "--host",
+        "0.0.0.0",
+        "--isolated",
+        "--config",
+        "/config/playwright-mcp-context.json",
+      ]
+
+networks:
+  cloudflare_tunnel_net:
+    external: true

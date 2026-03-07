@@ -15,7 +15,7 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
 export const TOOL_GROUPS: Record<string, string[]> = {
   // NOTE: Keep canonical (lowercase) tool names here.
   "group:memory": ["memory_search", "memory_get"],
-  "group:web": ["web_search", "web_fetch"],
+  "group:web": ["web_search", "web_fetch", "playwright_browser"],
   // Basic workspace/file tools
   "group:fs": ["read", "write", "edit", "apply_patch"],
   // Host/runtime execution tools
@@ -28,8 +28,8 @@ export const TOOL_GROUPS: Record<string, string[]> = {
     "sessions_spawn",
     "session_status",
   ],
-  // UI helpers
-  "group:ui": ["browser", "canvas"],
+  // UI helpers (browser + Playwright MCP for SPAs)
+  "group:ui": ["browser", "playwright_browser", "canvas"],
   // Automation + infra
   "group:automation": ["cron", "gateway"],
   // Messaging surface
@@ -39,6 +39,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   // All OpenClaw native tools (excludes provider plugins).
   "group:openclaw": [
     "browser",
+    "playwright_browser",
     "canvas",
     "nodes",
     "cron",
@@ -65,7 +66,7 @@ const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
     allow: ["session_status"],
   },
   coding: {
-    allow: ["group:fs", "group:runtime", "group:sessions", "group:memory", "image"],
+    allow: ["group:fs", "group:runtime", "group:sessions", "group:memory", "group:web", "image"],
   },
   messaging: {
     allow: [
@@ -143,7 +144,12 @@ export function expandToolGroups(list?: string[]) {
     }
     expanded.push(value);
   }
-  return Array.from(new Set(expanded));
+  const set = new Set(expanded);
+  // When "browser" is allowed, also allow playwright_browser (Playwright MCP for SPAs).
+  if (set.has("browser")) {
+    set.add("playwright_browser");
+  }
+  return Array.from(set);
 }
 
 export function collectExplicitAllowlist(policies: Array<ToolPolicyLike | undefined>): string[] {

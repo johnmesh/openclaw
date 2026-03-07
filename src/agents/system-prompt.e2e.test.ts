@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { buildAgentSystemPrompt, buildRuntimeLine } from "./system-prompt.js";
 
 describe("buildAgentSystemPrompt", () => {
@@ -21,6 +22,18 @@ describe("buildAgentSystemPrompt", () => {
 
     expect(prompt).not.toContain("## User Identity");
     expect(prompt).not.toContain("Owner numbers:");
+  });
+
+  it("returns only identity line in none prompt mode", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      promptMode: "none",
+      ownerNumbers: ["+123"],
+      toolNames: ["message"],
+      docsPath: "/tmp/docs",
+    });
+
+    expect(prompt).toBe("You are a personal assistant running inside OpenClaw.");
   });
 
   it("omits extended sections in minimal prompt mode", () => {
@@ -340,7 +353,18 @@ describe("buildAgentSystemPrompt", () => {
 
     expect(prompt).toContain("message: Send messages and channel actions");
     expect(prompt).toContain("### message tool");
-    expect(prompt).toContain("respond with ONLY: NO_REPLY");
+    expect(prompt).toContain(`respond with ONLY: ${SILENT_REPLY_TOKEN}`);
+  });
+
+  it("includes messageToolHints in Messaging section when provided", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["message"],
+      messageToolHints: ["Prefer action=send for quick replies."],
+    });
+
+    expect(prompt).toContain("### message tool");
+    expect(prompt).toContain("Prefer action=send for quick replies.");
   });
 
   it("includes runtime provider capabilities when present", () => {
@@ -430,7 +454,7 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("Current elevated level: on");
   });
 
-  it("includes reaction guidance when provided", () => {
+  it("includes reaction guidance when provided (minimal)", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
       reactionGuidance: {
@@ -441,5 +465,64 @@ describe("buildAgentSystemPrompt", () => {
 
     expect(prompt).toContain("## Reactions");
     expect(prompt).toContain("Reactions are enabled for Telegram in MINIMAL mode.");
+  });
+
+  it("includes reaction guidance when provided (extensive)", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      reactionGuidance: {
+        level: "extensive",
+        channel: "Discord",
+      },
+    });
+
+    expect(prompt).toContain("## Reactions");
+    expect(prompt).toContain("Reactions are enabled for Discord in EXTENSIVE mode.");
+    expect(prompt).toContain("Feel free to react liberally");
+  });
+
+  it("includes memory section with citations off when memoryCitationsMode is off", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["memory_search", "memory_get"],
+      memoryCitationsMode: "off",
+    });
+
+    expect(prompt).toContain("## Memory Recall");
+    expect(prompt).toContain(
+      "Citations are disabled: do not mention file paths or line numbers in replies unless the user explicitly asks.",
+    );
+  });
+
+  it("includes memory section with citation hint when memory tools available and citations on", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["memory_search", "memory_get"],
+    });
+
+    expect(prompt).toContain("## Memory Recall");
+    expect(prompt).toContain("Source: <path#line>");
+  });
+
+  it("includes exec tool summary with mcporter/Playwright hint when exec is available", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["exec"],
+    });
+
+    expect(prompt).toContain("exec:");
+    expect(prompt).toContain("mcporter");
+    expect(prompt).toContain("Playwright MCP");
+  });
+
+  it("includes playwright_browser tool summary when available", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["playwright_browser"],
+    });
+
+    expect(prompt).toContain("playwright_browser:");
+    expect(prompt).toContain("Playwright MCP");
+    expect(prompt).toContain("SPAs");
   });
 });

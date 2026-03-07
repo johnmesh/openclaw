@@ -52,6 +52,7 @@ import {
   resolveToolProfilePolicy,
   stripPluginOnlyAllowlist,
 } from "./tool-policy.js";
+import { createPlaywrightMcpTool } from "./tools/playwright-mcp-tool.js";
 
 function isOpenAIProvider(provider?: string) {
   const normalized = provider?.trim().toLowerCase();
@@ -462,9 +463,28 @@ export function createOpenClawCodingTools(options?: {
       sessionKey: options?.sessionKey,
     }),
   );
-  const withAbort = options?.abortSignal
+  let withAbort = options?.abortSignal
     ? withHooks.map((tool) => wrapToolWithAbortSignal(tool, options.abortSignal))
     : withHooks;
+  // Ensure playwright_browser is always in the list (Playwright MCP for SPAs).
+  if (!withAbort.some((t) => normalizeToolName(t.name) === "playwright_browser")) {
+    const playwrightTool = createPlaywrightMcpTool({ config: options?.config });
+    withAbort = [
+      ...withAbort,
+      options?.abortSignal
+        ? wrapToolWithAbortSignal(
+            wrapToolWithBeforeToolCallHook(normalizeToolParameters(playwrightTool), {
+              agentId,
+              sessionKey: options?.sessionKey,
+            }),
+            options.abortSignal,
+          )
+        : wrapToolWithBeforeToolCallHook(normalizeToolParameters(playwrightTool), {
+            agentId,
+            sessionKey: options?.sessionKey,
+          }),
+    ];
+  }
 
   // NOTE: Keep canonical (lowercase) tool names here.
   // pi-ai's Anthropic OAuth transport remaps tool names to Claude Code-style names

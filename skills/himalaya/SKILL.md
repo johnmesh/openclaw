@@ -72,6 +72,8 @@ message.send.backend.auth.cmd = "pass show email/smtp"
 
 ## Common Operations
 
+**No bare `list` subcommand.** Use `himalaya folder list`, `himalaya envelope list`, or `himalaya account list` (not `himalaya list`).
+
 ### List Folders
 
 ```bash

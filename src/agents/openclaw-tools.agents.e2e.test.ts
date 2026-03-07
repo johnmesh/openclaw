@@ -166,3 +166,25 @@ describe("agents_list", () => {
     expect(research?.configured).toBe(false);
   });
 });
+
+describe("createOpenClawTools tool list", () => {
+  it("includes playwright_browser tool", () => {
+    const tools = createOpenClawTools();
+    const playwright = tools.find((t) => t.name === "playwright_browser");
+    expect(playwright).toBeDefined();
+    expect(playwright?.name).toBe("playwright_browser");
+  });
+
+  it("omits message tool when disableMessageTool is true", () => {
+    const tools = createOpenClawTools({ disableMessageTool: true });
+    const message = tools.find((t) => t.name === "message");
+    expect(message).toBeUndefined();
+  });
+
+  it("includes message tool when disableMessageTool is false or omitted", () => {
+    expect(createOpenClawTools().find((t) => t.name === "message")).toBeDefined();
+    expect(
+      createOpenClawTools({ disableMessageTool: false }).find((t) => t.name === "message"),
+    ).toBeDefined();
+  });
+});

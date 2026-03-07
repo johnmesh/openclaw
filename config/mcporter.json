@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "description": "Playwright MCP (Docker)",
+      "baseUrl": "http://localhost:8931/mcp",
+      "url": "http://localhost:8931/mcp"
+    }
+  },
+  "imports": []
+}

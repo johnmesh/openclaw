@@ -14,16 +14,30 @@ describe("tool-policy", () => {
     expect(set.has("edit")).toBe(true);
   });
 
+  it("when browser is allowed, expands to include playwright_browser", () => {
+    const expanded = expandToolGroups(["browser"]);
+    const set = new Set(expanded);
+    expect(set.has("browser")).toBe(true);
+    expect(set.has("playwright_browser")).toBe(true);
+  });
+
   it("resolves known profiles and ignores unknown ones", () => {
     const coding = resolveToolProfilePolicy("coding");
     expect(coding?.allow).toContain("group:fs");
+    expect(coding?.allow).toContain("group:web");
     expect(resolveToolProfilePolicy("nope")).toBeUndefined();
   });
 
   it("includes core tool groups in group:openclaw", () => {
     const group = TOOL_GROUPS["group:openclaw"];
     expect(group).toContain("browser");
+    expect(group).toContain("playwright_browser");
     expect(group).toContain("message");
     expect(group).toContain("session_status");
+  });
+
+  it("group:web and group:ui include playwright_browser", () => {
+    expect(TOOL_GROUPS["group:web"]).toContain("playwright_browser");
+    expect(TOOL_GROUPS["group:ui"]).toContain("playwright_browser");
   });
 });

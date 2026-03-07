@@ -6,6 +6,11 @@ import { createOpenClawCodingTools } from "./pi-tools.js";
 const defaultTools = createOpenClawCodingTools();
 
 describe("createOpenClawCodingTools", () => {
+  it("includes playwright_browser so agents can use Playwright MCP for SPAs", () => {
+    const names = defaultTools.map((t) => t.name);
+    expect(names).toContain("playwright_browser");
+  });
+
   it("preserves action enums in normalized schemas", () => {
     const toolNames = ["browser", "canvas", "nodes", "cron", "gateway", "message"];
 
